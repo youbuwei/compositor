@@ -1,0 +1,6 @@
+# transient files from atomic writes
+*.tmp
+# macOS
+.DS_Store
+# Python
+__pycache__/
