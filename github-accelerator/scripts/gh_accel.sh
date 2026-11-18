@@ -4,6 +4,9 @@
 #   ~/.config/gh-accelerator/proxies.conf   （可用环境变量 GH_ACCEL_CONFIG 覆盖路径）
 # 输出语言: GH_ACCEL_LANG=zh（默认，面向 CN 网络用户）或 en
 # 依赖: curl, git, sha256sum/shasum。镜像状态易变，用前建议先跑 check。
+# 内容完整性：镜像仅作传输层。raw 文件按官方 git blob sha1 校验、Release 资产按
+# 官方 sha256 digest 校验（均取自 api.github.com 直连）；镜像 clone 按官方
+# ls-remote 的 HEAD 比对。拿不到官方摘要时，镜像下载一律拒绝落盘（--sha256 可显式指定）。
 set -uo pipefail
 
 CONFIG_FILE="${GH_ACCEL_CONFIG:-$HOME/.config/gh-accelerator/proxies.conf}"
@@ -92,6 +95,63 @@ sha256_file() {
   else
     return 1
   fi
+}
+
+# git blob sha1（与 contents API 返回的 .sha 同口径），用于 raw 文件校验
+blob_sha1() { git hash-object "$1" 2>/dev/null; }
+
+# api_get <endpoint> — 官方 REST API 直连取 JSON（gh 优先，匿名 curl 兜底）。
+# 成功时设置 API_BODY 并返回 0。api.github.com 是本技能的校验通道。
+api_get() {
+  API_BODY=""
+  if command -v gh >/dev/null 2>&1; then
+    if API_BODY=$(gh api "$1" 2>/dev/null); then return 0; fi
+  fi
+  API_BODY=$(curl -s --max-time 15 "https://api.github.com/$1" 2>/dev/null) || return 1
+  [ -n "$API_BODY" ]
+}
+
+# expected_digest <github-url> — 回显官方摘要 "algo:hash"（sha1:… / sha256:…），
+# 无法确定时返回 1。ref 含斜杠的 raw URL 与 archive 无法自动校验。
+expected_digest() {
+  case "$1" in
+    https://raw.githubusercontent.com/*)
+      local rest="${1#https://raw.githubusercontent.com/}"
+      local owner="${rest%%/*}"; rest="${rest#*/}"
+      local repo="${rest%%/*}"; rest="${rest#*/}"
+      local ref="${rest%%/*}"; local path="${rest#*/}"
+      [ -n "$path" ] && [ "$path" != "$rest" ] || return 1
+      api_get "repos/$owner/$repo/contents/$path?ref=$ref" || return 1
+      local h
+      h=$(printf '%s' "$API_BODY" | grep -o '"sha": *"[0-9a-f]\{40\}"' | head -1 | grep -o '[0-9a-f]\{40\}')
+      [ -n "$h" ] || return 1
+      printf 'sha1:%s' "$h" ;;
+    https://github.com/*/*/releases/download/*)
+      local rest="${1#https://github.com/}"
+      local owner="${rest%%/*}"; rest="${rest#*/}"
+      local repo="${rest%%/*}"
+      local tail="${rest#*/releases/download/}"
+      local tag="${tail%%/*}"; local file="${tail#*/}"
+      # 结构化解析（资产对象内嵌套 uploader 等，正则切分会误伤）：gh --jq 优先，python3 兜底
+      local d=""
+      if command -v gh >/dev/null 2>&1; then
+        d=$(gh api "repos/$owner/$repo/releases/tags/$tag" \
+             --jq ".assets[] | select(.name == \"$file\") | .digest" 2>/dev/null | head -1)
+      fi
+      if [ -z "$d" ] && command -v python3 >/dev/null 2>&1 \
+         && api_get "repos/$owner/$repo/releases/tags/$tag"; then
+        d=$(printf '%s' "$API_BODY" | python3 -c 'import json,sys
+for a in json.load(sys.stdin).get("assets", []):
+    if a.get("name") == sys.argv[1] and a.get("digest"):
+        print(a["digest"]); break
+' "$file" 2>/dev/null)
+      fi
+      case "$d" in
+        sha256:*) printf '%s' "$d" ;;
+        *) return 1 ;;
+      esac ;;
+    *) return 1 ;;
+  esac
 }
 
 usage() {
@@ -206,21 +266,36 @@ cmd_dl() {
   fi
   local tmp="$(mktemp "./.${out}.XXXXXX")"
 
+  # 官方摘要（raw→git blob sha1；release 资产→sha256 digest；拿不到则为空）
+  local expected=""
+  expected="$(expected_digest "$url")" || expected=""
+  if [ -n "$expect_sha" ]; then expected="sha256:$expect_sha"; fi
+
   local code got_sha p
   try_channel() {
     code=$(fetch "$1" "$tmp" "$2")
     if [ "$code" = "200" ] && [ -s "$tmp" ]; then
-      if [ -n "$expect_sha" ]; then
-        got_sha="$(sha256_file "$tmp")" || {
+      local via_official=1
+      case "$3" in 直连*|direct*) ;; *) via_official=0 ;; esac
+      if [ -z "$expected" ] && [ "$via_official" -eq 0 ]; then
+        rm -f "$tmp"
+        msg "  ✗ 拿不到官方摘要，无法校验镜像内容，拒绝落盘（提供 --sha256 可显式校验）" \
+            "  FAIL: no official digest to verify mirror content; refusing (pass --sha256 to pin)"
+        return 1
+      fi
+      if [ -n "$expected" ]; then
+        local algo="${expected%%:*}" hash="${expected#*:}" mine=""
+        if [ "$algo" = "sha256" ]; then
+          mine="$(sha256_file "$tmp")" || { rm -f "$tmp"
+            msg "  ✗ 无法计算 sha256（缺少 sha256sum/shasum）" \
+                "  FAIL: cannot compute sha256 (sha256sum/shasum missing)"; return 1; }
+        else
+          mine="$(blob_sha1 "$tmp")"
+        fi
+        if [ -z "$mine" ] || [ "$mine" != "$hash" ]; then
           rm -f "$tmp"
-          msg "  ✗ 无法计算 sha256（缺少 sha256sum/shasum）" \
-              "  FAIL: cannot compute sha256 (sha256sum/shasum missing)"
-          return 1
-        }
-        if [ "$got_sha" != "$expect_sha" ]; then
-          rm -f "$tmp"
-          msg "  ✗ sha256 不匹配（期望 ${expect_sha:0:12}…，得到 ${got_sha:0:12}…）" \
-              "  FAIL: sha256 mismatch (expected ${expect_sha:0:12}..., got ${got_sha:0:12}...)"
+          msg "  ✗ 校验失败：官方 ${algo} ${hash:0:12}…，得到 ${mine:0:12}…（截断/篡改？），换下一通道" \
+              "  FAIL: ${algo} mismatch (official ${hash:0:12}..., got ${mine:0:12}...); trying next channel"
           return 1
         fi
       fi
@@ -228,8 +303,13 @@ cmd_dl() {
       got_sha="$(sha256_file "$out" 2>/dev/null)" || got_sha="unknown"
       msg "✅ 经 $3 下载成功 -> $out ($(du -h "$out" | cut -f1), sha256=$got_sha)" \
           "OK: downloaded via $3 -> $out ($(du -h "$out" | cut -f1), sha256=$got_sha)"
-      [ -z "$expect_sha" ] && msg "⚠️  未提供 --sha256，请自行校验后再使用" \
-                                  "WARN: no --sha256 given; verify before use"
+      if [ -n "$expected" ]; then
+        msg "  ✓ 内容已按官方摘要校验（${expected%%:*}）" \
+            "  verified against the official digest (${expected%%:*})"
+      else
+        msg "⚠️  官方源无摘要可比对（archive/gist 等），已回显 sha256，请自行核对" \
+            "WARN: no digest available for this URL; verify the printed sha256 yourself"
+      fi
       return 0
     fi
     rm -f "$tmp"
@@ -296,10 +376,24 @@ cmd_clone() {
   for base in "${CLONE_PROXIES[@]}"; do
     msg "→ 镜像: $base/$repo" "-> mirror: $base/$repo"
     if git clone "$base/$repo" "$dir"; then
-      msg "✅ 经镜像 clone 成功 -> $dir" "OK: mirror clone -> $dir"
-      msg "⚠️  remote 指向镜像，push 前执行:" "WARN: remote points to the mirror; before pushing run:"
-      msg "   git -C $dir remote set-url origin https://github.com/$repo.git" \
-          "   git -C $dir remote set-url origin https://github.com/$repo.git"
+      # 与官方 HEAD 比对：镜像可能给错内容/旧缓存
+      local got_head official_head
+      got_head="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
+      official_head="$(timeout 20 git ls-remote "https://github.com/$repo.git" HEAD 2>/dev/null | awk '{print $1}')"
+      if [ -n "$official_head" ] && [ -n "$got_head" ] && [ "$official_head" != "$got_head" ]; then
+        [ "$dir_pre_existed" -eq 0 ] && rm -rf "$dir"
+        msg "  ✗ HEAD 与官方不一致（$(echo "$got_head" | cut -c1-12) ≠ $(echo "$official_head" | cut -c1-12)），丢弃" \
+            "  FAIL: HEAD differs from official; discarding"
+        continue
+      fi
+      if [ -z "$official_head" ]; then
+        msg "⚠️  官方 ls-remote 不可达，未能校验 HEAD，请自行核对 git log 后再使用" \
+            "WARN: official ls-remote unreachable; verify the commit log yourself"
+      fi
+      # 校验通过（或无法校验但已警告）：恢复官方 remote，避免误推到镜像
+      git -C "$dir" remote set-url origin "https://github.com/$repo.git"
+      msg "✅ 经镜像 clone 成功 -> $dir（remote 已恢复官方源）" \
+          "OK: mirror clone -> $dir (remote restored to the official origin)"
       return 0
     fi
     if [ "$dir_pre_existed" -eq 0 ]; then rmdir "$dir" 2>/dev/null || true; fi
