@@ -10,12 +10,16 @@ invariants and the procedure; look everything else up.
 
 1. Read the project's manifest `version`.
 2. Check `references/upstream/metadata.json` for the highest format version
-   the cached docs cover.
+   the cached docs cover, and the pinned upstream tag they came from.
 3. Run `python3 scripts/fetch_format_docs.py --auto --for-version <version>`
    as automatic housekeeping (any Python 3, standard library only): it
    no-ops when the cache is fresh and refreshes it when missing, older than
-   the project, or older than 7 days. Then read
-   `references/upstream/project-format.md` — the authoritative snapshot.
+   the project, fetched from a different pin, or older than 7 days. The
+   fetch is pinned to a fixed upstream release tag — never the moving
+   `main` branch — so the cached bytes are reproducible; moving the pin to
+   a newer tag is an explicit, user-approved action (`--pin latest --yes`).
+   Then read `references/upstream/project-format.md` — the authoritative
+   snapshot for that pinned version.
    `validate_comp.py` also warns when a project is newer than the cache.
 4. Offline? Use this note plus whatever the cache holds, and tell the user
    the format knowledge may be stale.

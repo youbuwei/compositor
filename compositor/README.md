@@ -57,8 +57,11 @@ hard-coding a feature list that rots, the skill:
 
 1. reads the project's manifest `version`,
 2. runs `fetch_format_docs.py --auto` before edits — a no-op when the cached
-   docs are fresh, a fetch when they are missing, older than the project, or
-   older than 7 days,
+   docs are fresh, a fetch when they are missing, older than the project,
+   fetched from a different pinned tag, or older than 7 days. Fetches are
+   pinned to a fixed upstream release tag (never the moving `main` branch),
+   so the cached bytes are reproducible; moving the pin is an explicit
+   `--pin latest --yes`,
 3. validates against the authoritative cached snapshot, and
 4. falls back to the bundled invariants note when offline, and says so.
 
