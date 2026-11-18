@@ -44,7 +44,7 @@ For ambiguous destructive actions (delete, flatten, replace, crop the whole docu
 - Keep each logical visual element on its own layer when that improves editability.
 - Use document-sized transparent canvases for full-canvas layers; for cropped assets, ensure the manifest transform places and scales the pixels correctly.
 - Generate alpha transparently; do not simulate transparency with a checkerboard pattern.
-- Use whatever image tooling is installed — Python/Pillow, macOS `sips`, or any other available tool; do not assume a particular library, tool version, or Python version is present. Use image-generation tools only when the user asks for generated imagery.
+- Generate assets with the bundled generator instead of writing throwaway image scripts — `python3 scripts/comp_png.py` runs on any Python 3, standard library alone: `solid`, `gradient`, `ellipse`, `rect`, `dots` produce RGBA layers and `mask` produces 8-bit grayscale masks, e.g. `python3 scripts/comp_png.py gradient --size 1920x1080 --dir v --from "#10143A" --to "#7A3E8C" --out images/<id>.png` (`--help` on each subcommand lists the options). For heavier raster work use whatever is installed — Python/Pillow, macOS `sips`, or any other tool; do not assume a particular library, tool version, or Python version is present (`sips -s format png` converts JPEG and other source formats). Use image-generation tools only when the user asks for generated imagery.
 - Do not claim that an operation such as healing, content-aware fill, or a native Compositor filter was performed unless it was actually performed by an available tool.
 - Preserve image aspect ratio unless the user explicitly requests stretching.
 
@@ -74,7 +74,7 @@ After each small batch (preferably one or two layers):
 - Verify every referenced asset exists and is readable.
 - Verify dimensions, alpha channel, and file sizes.
 - Check UUID uniqueness and layer references.
-- Render a preview using an available renderer or MCP tool if present. If no renderer is available, say that visual verification has not been performed.
+- Render a preview with the bundled compositor — standard library only: `python3 scripts/comp_png.py preview <project.comp> --out preview.png`. It applies transforms, opacity, every documented blend mode, raster masks (linked and unlinked), groups, and clipping masks, and reports EXR, adjustment-layer, layer-effect, and GIF limitations on stderr instead of rendering them silently. Inspect the preview image to verify the result. If you cannot run it, use an available renderer or MCP tool; if none is available, say that visual verification has not been performed.
 - If Compositor is open, allow it to reload and ask the user to confirm the visible result when visual inspection is needed.
 - Report limitations, skipped effects, and any mismatch between requested and implemented work.
 
@@ -106,6 +106,7 @@ Do not flatten the project unless explicitly requested. Keep the editable `.comp
 - `references/upstream/` — cached upstream docs (authoritative snapshot) plus `metadata.json` recording the covered version
 - `scripts/fetch_format_docs.py` — auto-refresh the doc cache (`--auto`); run before editing, no-ops when fresh
 - `scripts/validate_comp.py` — structural validator; run it in the Verify step. Standard library only, works on any Python 3
+- `scripts/comp_png.py` — zero-dependency PNG asset generator (`solid`/`gradient`/`ellipse`/`rect`/`dots`/`mask`) and preview compositor; standard library only, works on any Python 3
 
 Upstream sources:
 - https://github.com/robbietilton/Compositor

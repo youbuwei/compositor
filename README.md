@@ -44,6 +44,7 @@ and asks before destructive actions.
 | --- | --- |
 | `SKILL.md` | The workflow, safety rules, and trigger description |
 | `scripts/validate_comp.py` | Structural validator: manifest keys, duplicate ids, image/mask assets, PNG headers, upstream naming rules |
+| `scripts/comp_png.py` | Zero-dependency PNG asset generator (`solid`, `gradient`, `ellipse`, `rect`, `dots`, `mask`) and preview compositor |
 | `scripts/fetch_format_docs.py` | Auto-refreshing cache of the upstream format docs |
 | `references/project-format.md` | Format invariants and the adaptive-knowledge procedure |
 | `references/safe-editing.md` | Pre-flight and post-edit checklist |
@@ -66,8 +67,8 @@ newer than the docs cache covers.
 
 ## Requirements
 
-- Any Python 3 — both scripts run on the standard library alone; Pillow, when
-  present, only adds deeper PNG corruption checks.
+- Any Python 3 — all three scripts run on the standard library alone; Pillow,
+  when present, only adds deeper PNG corruption checks.
 - Network access is optional; it is used only to refresh the doc cache.
 - The [Compositor](https://github.com/robbietilton/Compositor) macOS app to
   view the results — the skill itself only reads and writes files.
@@ -77,6 +78,15 @@ newer than the docs cache covers.
 ```bash
 # structural check of a project (stdlib only)
 python3 scripts/validate_comp.py path/to/Project.comp
+
+# generate a layer asset — no Pillow, no throwaway scripts (stdlib only)
+python3 scripts/comp_png.py gradient --size 1920x1080 --dir v \
+    --from "#10143A" --to "#7A3E8C" --out path/to/Project.comp/images/<id>.png
+python3 scripts/comp_png.py mask --size 300x300 --from 255 --to 60 --dir h \
+    --out path/to/Project.comp/images/<id>.mask.png
+
+# composite a project to a preview PNG for visual verification
+python3 scripts/comp_png.py preview path/to/Project.comp --out preview.png
 
 # refresh the upstream doc cache when needed
 python3 scripts/fetch_format_docs.py --auto
