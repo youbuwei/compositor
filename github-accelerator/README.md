@@ -15,8 +15,7 @@
 
 - **gh CLI / API 永走直连**——`api.github.com` 基本不受网络干扰，是最高优先级通道
 - **网页内容绕过网页**——README / 源文件用 `gh api` 直连取，不看 github.com 页面
-- **下载自动降级**：直连 → `ghfast.top` → `gh-proxy.com`
-- **clone 自动降级**：直连 → `gitclone.com` → `gh-proxy.com`
+- **下载/clone 自动降级**：直连 → 已配置镜像（脚本**不内置任何第三方镜像域名**，信任谁由用户经 `~/.config/gh-accelerator/proxies.conf` 自己决定）
 - **镜像仅作传输层（强制校验）**：raw 文件按官方 git blob sha1、release 资产按官方 sha256 digest 比对（取自 api.github.com 直连）；镜像 clone 按官方 HEAD 比对并自动恢复官方 remote。校验失败→弃内容换通道；拿不到官方摘要的镜像下载直接拒绝落盘
 - **传输安全护栏**：仅接受 GitHub 官方域名 URL；拒绝查询串/内嵌凭据；先写临时文件、拒绝覆盖已有文件；`--sha256` 可显式指定期望摘要
 - **clone 目录保护**：目标目录已存在且非空时直接拒绝，失败清理只用非递归 `rmdir`
@@ -78,11 +77,9 @@ scripts/gh_accel.sh check
   ✓ codeload.github.com/... (200)
   ✗ github.com/ (000)
 == 下载镜像（拉测试文件验内容）==
-  ✓ ghfast.top
-  ✓ gh-proxy.com
-  ✗ ghproxy.net
+  （未配置任何下载镜像；在 proxies.conf 添加 DOWNLOAD_PROXY= 行接入）
 == clone 镜像（ls-remote 探测公开仓库）==
-  ✓ https://gh-proxy.com/https://github.com
+  ✓ https://your-mirror.example.com/https://github.com  [本地]
 ```
 
 ```bash
@@ -102,18 +99,16 @@ gh api repos/OWNER/REPO/readme --jq .content | base64 -d
 
 1. **先跑 `check`**——直连基线因机器/网络而异，不要套用本文档的结论
 2. 下载失败看输出停在哪一站，`check` 定位是镜像死了还是直连抽风
-3. 镜像全灭时：编辑 `scripts/gh_accel.sh` 顶部的 `DL_PROXIES` / `CLONE_PROXIES` 数组换站
+3. 镜像全灭时：按 SKILL.md §10 找新镜像——先 `dl` 实测 + 官方摘要校验通过，再写入 `~/.config/gh-accelerator/proxies.conf`
 
-## 镜像梯次维护（镜像站易死，务必定期探测）
+## 镜像接入与维护（镜像站易死，务必定期探测）
 
-| 用途 | 梯次（脚本自动按序尝试） | 2026-09-08 实测 |
-|---|---|---|
-| 文件下载 | ghfast.top → gh-proxy.com | ✅ 稳定 / ⚠️ 波动 |
-| 仓库克隆 | gitclone.com → gh-proxy.com 前缀 | ⚠️ 冷缓存 502 / ✅ |
-| 网页浏览 | 不要依赖镜像：用 gh api 取内容；要渲染页面让本机浏览器看 | kkgithub / bgithub 实测 clone 404、超时 |
-| 已死勿用 | ghp.ci · ghgo.xyz · ghproxy.com · hub.fastgit.org（ghproxy.net 大文件限流） | 已确认 |
+- **脚本不内置任何第三方镜像**：公共镜像站是不可信转发方，由用户经 `~/.config/gh-accelerator/proxies.conf` 自行接入（`DOWNLOAD_PROXY` / `CLONE_PROXY`，每行一条按序降级）
+- **内容完整性有兜底**：无论走哪个镜像，raw 按 blob sha1、release 资产按 sha256 digest、clone 按官方 HEAD 强制校验；校验不过或拿不到摘要一律拒绝
+- **候选必须实测**：`dl --no-direct <真实大文件>` 官方摘要校验通过才可写入配置；失效镜像及时移除
+- 网页浏览不要依赖镜像：用 gh api 取内容；要渲染页面让本机浏览器看
 
-找新镜像：`ghproxy.link`（gh-proxy 官方域名发布页）+ 近期「github 加速」文章；**候选必须真实文件 + sha256 实测通过**才可写入梯次。
+找新镜像：搜索「github 加速 / gh-proxy 自建」近况；**可自建的 gh-proxy 类开源实现可信度最高**。
 
 ## 限制与边界
 
@@ -128,8 +123,8 @@ gh api repos/OWNER/REPO/readme --jq .content | base64 -d
 | 症状 | 原因与处理 |
 |---|---|
 | `check` 某站显示 `000` | 该通道当前不可达（超时/被墙）。等几分钟重试；确认多次失败则从梯次中移除 |
-| 下载全部通道失败 | 跑 `check` 看存活情况 → 换新镜像写入脚本顶部数组 |
-| gitclone.com clone 报 502 | 该站冷缓存/不稳定，属正常现象；脚本自动跳到下一镜像，或稍后重试 |
+| 下载全部通道失败 | 跑 `check` 看存活情况 → 按 §10 找新镜像、实测后写入本地配置 |
+| 镜像 clone 报 502 | 镜像冷缓存/不稳定，属正常现象；脚本自动跳到下一镜像，或稍后重试 |
 | 直连明明通了却走了镜像 | 直连首试偶发超时即降级——符合设计（重试成本 < 长时间挂起） |
 | 经镜像 clone 后 push 报认证失败 | remote 还是镜像地址；按脚本提示 `set-url` 回官方源再 push |
 | 有自己的加速域名想接入 | 写入 `~/.config/gh-accelerator/proxies.conf`（模板见 `templates/`），自动优先于公共镜像 |

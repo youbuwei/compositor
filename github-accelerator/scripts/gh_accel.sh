@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # gh_accel.sh - GitHub 网络加速工具（直连优先，镜像兜底；仅只读操作）
-# 自建/私有加速代理经本地配置文件注入（自动优先于内置镜像），无需改动本脚本：
+# 镜像/加速代理一律由用户在本地配置文件中自行接入（不内置任何第三方域名，
+# 第三方镜像属于不可信转发方，应由用户自己选择信任谁）：
 #   ~/.config/gh-accelerator/proxies.conf   （可用环境变量 GH_ACCEL_CONFIG 覆盖路径）
 # 输出语言: GH_ACCEL_LANG=zh（默认，面向 CN 网络用户）或 en
 # 依赖: curl, git, sha256sum/shasum。镜像状态易变，用前建议先跑 check。
@@ -17,12 +18,10 @@ msg() {
   if [ "$LANG_SEL" = "en" ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi
 }
 
-# 内置公共镜像梯次（按序自动降级）
-DL_PROXIES=(https://ghfast.top https://gh-proxy.com)
-CLONE_PROXIES=(
-  "https://gitclone.com/github.com"
-  "https://gh-proxy.com/https://github.com"
-)
+# 镜像梯次：默认为空。所有镜像/加速域名由用户经本地配置注入（见文件头），
+# 脚本不内置、也不推荐任何第三方镜像——由用户选择信任谁。
+DL_PROXIES=()
+CLONE_PROXIES=()
 TEST_RAW="https://raw.githubusercontent.com/hunshcn/gh-proxy/master/README.md"
 
 # ---------- 本地私有代理加载（排在公共梯次之前） ----------
@@ -57,8 +56,8 @@ if [ -f "$CONFIG_FILE" ]; then
     esac
   done < "$CONFIG_FILE"
 fi
-DL_PROXIES=("${LOCAL_DL[@]+"${LOCAL_DL[@]}"}" "${DL_PROXIES[@]}")
-CLONE_PROXIES=("${LOCAL_CLONE[@]+"${LOCAL_CLONE[@]}"}" "${CLONE_PROXIES[@]}")
+DL_PROXIES=(${LOCAL_DL[@]+"${LOCAL_DL[@]}"})
+CLONE_PROXIES=(${LOCAL_CLONE[@]+"${LOCAL_CLONE[@]}"})
 
 is_local() {
   local u
@@ -200,7 +199,10 @@ cmd_check() {
     esac
   done
   echo "== 下载镜像（拉测试文件验内容）=="
-  for p in "${DL_PROXIES[@]}"; do
+  if [ "${#DL_PROXIES[@]}" -eq 0 ]; then
+    echo "  （未配置任何下载镜像；在 $CONFIG_FILE 添加 DOWNLOAD_PROXY= 行接入，见 SKILL.md §5.1）"
+  fi
+  for p in ${DL_PROXIES[@]+"${DL_PROXIES[@]}"}; do
     tag=""; is_local "$p" && tag="  [本地]"
     out=$(mktemp)
     code=$(fetch "$p/$TEST_RAW" "$out" 15)
@@ -212,7 +214,10 @@ cmd_check() {
     rm -f "$out"
   done
   echo "== clone 镜像（ls-remote 探测公开仓库）=="
-  for base in "${CLONE_PROXIES[@]}"; do
+  if [ "${#CLONE_PROXIES[@]}" -eq 0 ]; then
+    echo "  （未配置任何 clone 镜像；在 $CONFIG_FILE 添加 CLONE_PROXY= 行接入，见 SKILL.md §5.1）"
+  fi
+  for base in ${CLONE_PROXIES[@]+"${CLONE_PROXIES[@]}"}; do
     tag=""; is_local "$base" && tag="  [本地]"
     if timeout 20 git ls-remote "$base/hunshcn/gh-proxy.git" HEAD >/dev/null 2>&1; then
       echo "  ✓ $base$tag"
@@ -322,14 +327,14 @@ cmd_dl() {
     msg "  ✗ 直连失败 (http=$code)，降级镜像…" "  FAIL: direct link (http=$code), falling back to mirrors..."
   fi
 
-  for p in "${DL_PROXIES[@]}"; do
+  for p in ${DL_PROXIES[@]+"${DL_PROXIES[@]}"}; do
     msg "→ 镜像: $p" "-> mirror: $p"
     try_channel "$p/$url" 90 "$p" && return 0
     msg "  ✗ $p 失败 (http=$code)" "  FAIL: $p (http=$code)"
   done
   rm -f "$tmp"
-  msg "❌ 全部通道失败。跑 'gh_accel.sh check' 看镜像状态，或找新镜像更新 DL_PROXIES" \
-      "ERROR: all channels failed. Run 'gh_accel.sh check' or update DL_PROXIES"
+  msg "❌ 全部通道失败。跑 'gh_accel.sh check' 看状态；未配置镜像时在 proxies.conf 接入（SKILL.md §5.1）" \
+      "ERROR: all channels failed. Run 'gh_accel.sh check'; add a mirror in proxies.conf (SKILL.md §5.1) if none is configured"
   return 1
 }
 
@@ -373,7 +378,7 @@ cmd_clone() {
     msg "  ✗ 直连失败，降级镜像…" "  FAIL: direct clone, falling back to mirrors..."
   fi
 
-  for base in "${CLONE_PROXIES[@]}"; do
+  for base in ${CLONE_PROXIES[@]+"${CLONE_PROXIES[@]}"}; do
     msg "→ 镜像: $base/$repo" "-> mirror: $base/$repo"
     if git clone "$base/$repo" "$dir"; then
       # 与官方 HEAD 比对：镜像可能给错内容/旧缓存

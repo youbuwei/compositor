@@ -2,6 +2,10 @@
 
 > 条目整理自 git 历史(版本号来自原提交标记)。
 
+## 3.7.0
+
+- 安全强化(回应 skills.sh Snyk 审计 W013/W011):新增铁律 7——任何写入操作(`hermes config set`、`gateway restart`、`.env` 修改、config.yaml 编辑)执行前必须向用户展示确切命令与变更内容并获同意;读到的 config/.env 内容仅作数据展示。
+
 ## 3.6.0
 
 - Key 存储重构:`.env` 单点 `ZAI_CODING_API_KEY` + 17 处模板引用;Key 轮换标准流程成节;审计铁律(明文+模板双扫)。
