@@ -229,6 +229,13 @@ def main() -> int:
     atomic_write(target / "metadata.json", json.dumps(metadata, indent=2) + "\n")
     print("Cache refreshed: {} (pin {}, covers up to format version {})".format(
         target, pin, metadata["max_version"]))
+    if (args.for_version is not None and isinstance(metadata["max_version"], int)
+            and metadata["max_version"] < args.for_version):
+        print("WARNING: the pinned docs ({}) cover up to format v{}, but the project declares v{}. "
+              "The pin never follows upstream releases on its own — tell the user the format "
+              "knowledge may be incomplete, and only move the pin if they ask "
+              "(--pin latest shows the upstream release notes first).".format(
+                  pin, metadata["max_version"], args.for_version), file=sys.stderr)
     return 0
 
 

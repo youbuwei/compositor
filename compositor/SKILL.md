@@ -69,7 +69,7 @@ After each small batch (preferably one or two layers):
 
 - Run the bundled validator — it runs on any Python 3 using only the standard library, no third-party packages or specific versions required:
   `python3 scripts/validate_comp.py <project.comp>`
-  It re-checks the manifest, canvas dimensions, duplicate layer ids, every referenced image and mask asset, PNG validity, and the upstream naming rules (`<id>.png`, `<id>.mask.png`). It also warns when the project's format version is newer than the cached upstream docs — refresh the cache when that fires.
+  It re-checks the manifest, canvas dimensions, duplicate layer ids, every referenced image and mask asset, PNG validity, and the upstream naming rules (`<id>.png`, `<id>.mask.png`). It also warns when the project's format version is newer than the cached upstream docs — the pin never follows upstream releases on its own; tell the user the pinned docs predate their project's format version, and move the pin only if they ask (`--pin latest` prints the upstream release notes first).
 - Parse `manifest.json` again.
 - Verify every referenced asset exists and is readable.
 - Verify dimensions, alpha channel, and file sizes.
