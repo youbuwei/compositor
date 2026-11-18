@@ -38,6 +38,8 @@ Before modifying files, state a concise edit plan:
 
 For ambiguous destructive actions (delete, flatten, replace, crop the whole document, overwrite source assets), ask for confirmation.
 
+Work from the user's need, not from format-version framing: implement requests with the established core features and do not make version numbers a topic unless they matter. When a requested effect needs a newer, version-gated format feature — or newer pinned docs than the cache provides — say plainly what it requires, and only bump the pin, raise the manifest version, or fetch newer docs after the user approves.
+
 ### 3. Create or edit pixel assets
 
 - Use RGBA PNG for layer pixels unless the current project format explicitly specifies otherwise.
