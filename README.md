@@ -18,7 +18,7 @@ screenshot-driven clicking. What you get are ordinary, fully editable layers.
 With the [`skills`](https://github.com/vercel-labs/skills) CLI (Node.js ≥ 22.20):
 
 ```bash
-npx skills add youbuwei/compositor
+npx skills add youbuwei/skills
 ```
 
 Or manually: clone or copy this folder into your agent's skills directory,
