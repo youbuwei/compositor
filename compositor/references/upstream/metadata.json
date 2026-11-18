@@ -1,0 +1,8 @@
+{
+  "fetched_at": "2026-11-17T10:23:33+00:00",
+  "max_version": 21,
+  "sources": {
+    "project-format.md": "https://raw.githubusercontent.com/robbietilton/Compositor/main/docs/project-format.md",
+    "writing-comp-files.md": "https://raw.githubusercontent.com/robbietilton/Compositor/main/docs/writing-comp-files.md"
+  }
+}
