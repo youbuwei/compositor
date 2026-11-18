@@ -1,6 +1,7 @@
 ---
 name: compositor
 description: Create, inspect, and edit Compositor .comp image-editing projects for the macOS Compositor app. Use when the user asks to design or modify layered artwork, manipulate Compositor projects, create layer assets or masks, or prepare images for Compositor.
+version: 1.1.0
 ---
 
 # Compositor Skill

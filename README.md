@@ -3,8 +3,8 @@
 <a href="https://www.skills.sh/youbuwei/skills"><img alt="skills.sh" src="https://www.skills.sh/b/youbuwei/skills?style=for-the-badge" height="28"></a>
 
 A monorepo of agent skills. Each subdirectory is a self-contained skill with
-its own `SKILL.md`; every skill keeps its original git history (merged with
-`git subtree`).
+its own `SKILL.md` and `CHANGELOG.md`; every skill keeps its original git
+history (merged with `git subtree`).
 
 ## Skills
 
