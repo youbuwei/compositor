@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+# third-party skill kept locally, not part of this collection
+/ui-ux-pro-max/
+# compositor local test scaffolding
+/compositor/local-test/
