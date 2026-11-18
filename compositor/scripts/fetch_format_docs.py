@@ -13,8 +13,9 @@ project format version it covers.
 Pinned by default: fetches always come from a fixed upstream release tag
 (currently v1.6.13), never the moving main branch, so the fetched bytes are
 reproducible and can't silently change. Run with --pin latest to move the
-pin to the newest published tag (an explicit, user-visible upgrade), and
---pin <tag> to choose a tag yourself.
+pin to the newest published tag — the upstream release notes between the
+cached and the new tag are printed first, so the bump is an informed,
+user-approved decision — and --pin <tag> to choose a tag yourself.
 
 With --auto, the script first checks the existing cache and exits as a fast
 no-op when it is fresh. It refreshes only when the cache is missing, does
@@ -61,6 +62,30 @@ def latest_tag():
     with urllib.request.urlopen(request, timeout=20) as response:
         tags = json.loads(response.read().decode("utf-8"))
     return tags[0]["name"] if tags else None
+
+
+def print_release_notes(cached_pin, new_pin):
+    """Show upstream release notes between cached_pin (exclusive) and
+    new_pin, so a pin bump is an informed decision. Best effort: silent on
+    any failure."""
+    try:
+        request = urllib.request.Request(
+            "https://api.github.com/repos/robbietilton/Compositor/releases?per_page=30",
+            headers={"User-Agent": "compositor-skill-doc-fetcher"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            rels = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return
+    names = [r["tag_name"] for r in rels]
+    if cached_pin in names and new_pin in names:
+        start, end = names.index(new_pin), names.index(cached_pin)
+        if start < end:
+            print("\nUpstream changes since {}:".format(cached_pin))
+            for rel in rels[start:end]:
+                print("  {} ({}):".format(rel["tag_name"], (rel.get("published_at") or "")[:10]))
+                for line in (rel.get("body") or "").strip().split("\n"):
+                    if line.strip():
+                        print("    " + line.strip())
 
 
 def fetch(url):
@@ -170,11 +195,13 @@ def main() -> int:
         for reason in reasons:
             print("Refreshing: {}".format(reason))
 
-    if meta is not None and meta.get("pin") not in (None, pin) and not args.yes:
-        answer = input("Move the doc cache pin from {!r} to {!r}? [y/N] ".format(meta.get("pin"), pin))
-        if answer.strip().lower() not in ("y", "yes"):
-            print("Keeping the existing cache; nothing was fetched.")
-            return 0
+    if meta is not None and meta.get("pin") not in (None, pin):
+        print_release_notes(meta.get("pin"), pin)
+        if not args.yes:
+            answer = input("\nMove the doc cache pin from {!r} to {!r}? [y/N] ".format(meta.get("pin"), pin))
+            if answer.strip().lower() not in ("y", "yes"):
+                print("Keeping the existing cache; nothing was fetched.")
+                return 0
 
     target.mkdir(parents=True, exist_ok=True)
     metadata = {
