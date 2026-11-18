@@ -18,8 +18,8 @@ invariants and the procedure; look everything else up.
    fetch is pinned to a fixed upstream release tag — never the moving
    `main` branch — so the cached bytes are reproducible; moving the pin to
    a newer tag is an explicit, user-approved action (`--pin latest --yes`).
-   Then read `references/upstream/project-format.md` — the authoritative
-   snapshot for that pinned version.
+   Then read `references/upstream/project-format.md` — the format
+   reference for that pinned version.
    `validate_comp.py` also warns when a project is newer than the cache.
 4. Offline? Use this note plus whatever the cache holds, and tell the user
    the format knowledge may be stale.

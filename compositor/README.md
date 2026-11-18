@@ -52,7 +52,7 @@ and asks before destructive actions.
 
 ## Self-adapting format knowledge
 
-The `.comp` format evolves (upstream is at version 21 today). Instead of
+The `.comp` format evolves (the pinned docs cover version 22 today). Instead of
 hard-coding a feature list that rots, the skill:
 
 1. reads the project's manifest `version`,
@@ -62,7 +62,7 @@ hard-coding a feature list that rots, the skill:
    pinned to a fixed upstream release tag (never the moving `main` branch),
    so the cached bytes are reproducible; moving the pin is an explicit
    `--pin latest --yes`,
-3. validates against the authoritative cached snapshot, and
+3. validates against the pinned cached snapshot, and
 4. falls back to the bundled invariants note when offline, and says so.
 
 `validate_comp.py` additionally warns whenever a project declares a version
